@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import Header from '../components/Header'
 import {
   ApiValidationError,
+  PartialVehicleUpdateError,
   createVehicle,
   getVehicle,
   getVehicleImageUrl,
@@ -15,6 +16,7 @@ import {
   type CreateVehicleData,
   type CreateVehiclePayload,
   type UpdateVehiclePayload,
+  type Vehicle,
 } from '../types/models'
 
 interface SelectedImage {
@@ -26,7 +28,8 @@ interface SelectedImage {
 }
 
 const maxImages = 5
-const maxImageSize = 200 * 1024 * 1024
+const maxImageSize = 2 * 1024 * 1024
+const allowedImageTypes = new Set(['image/jpeg', 'image/png', 'image/webp'])
 
 const transmissionOptions = [
   { value: VehicleTransmission.Manual, label: 'Manual' },
@@ -79,7 +82,7 @@ function validateVehicle(formData: FormData) {
     }
   })
 
-  if (values.placa && !/^[A-Z]{3}\d[A-Z]\d{2}$/i.test(values.placa)) {
+  if (values.placa && !/^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/i.test(values.placa)) {
     errors.placa = 'Informe uma placa válida no formato ABC1D23.'
   }
 
@@ -117,6 +120,7 @@ function CreateVehicle() {
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [vehicleSaved, setVehicleSaved] = useState(false)
+  const [formVersion, setFormVersion] = useState(0)
   const [saleValue, setSaleValue] = useState('')
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([])
   const [coverImageId, setCoverImageId] = useState<string | null>(null)
@@ -128,11 +132,35 @@ function CreateVehicle() {
     data: existingVehicle,
     isLoading: isLoadingVehicle,
     isError: isVehicleError,
+    refetch: refetchVehicle,
   } = useQuery({
     queryKey: ['vehicle', parsedVehicleId],
     queryFn: () => getVehicle(parsedVehicleId),
     enabled: isEditing && Number.isInteger(parsedVehicleId) && parsedVehicleId > 0,
   })
+
+  function initializeVehicleForm(vehicle: Vehicle) {
+    selectedImagesRef.current.forEach((image) => {
+      if (image.file) URL.revokeObjectURL(image.previewUrl)
+    })
+    const currentImages = vehicle.vehicle_images.map((image) => ({
+      id: `existing-${image.id}`,
+      existingId: image.id,
+      name: `Imagem ${image.id}`,
+      previewUrl: getVehicleImageUrl(image.path),
+    }))
+    const cover = vehicle.vehicle_images.find((image) => image.is_cover)
+
+    setSaleValue(currencyFormatter.format(vehicle.valor_venda))
+    setSelectedImages(currentImages)
+    setCoverImageId(cover ? `existing-${cover.id}` : currentImages[0]?.id ?? null)
+    setFieldErrors({})
+    setImagesError('')
+    initialImageIdsRef.current = vehicle.vehicle_images.map((image) => image.id)
+    formInitializedRef.current = true
+    setFormVersion((currentVersion) => currentVersion + 1)
+  }
+
   const mutation = useMutation({
     mutationFn: (payload: CreateVehiclePayload | UpdateVehiclePayload) => (
       'vehicleId' in payload ? updateVehicle(payload) : createVehicle(payload)
@@ -142,37 +170,42 @@ function CreateVehicle() {
       await queryClient.invalidateQueries({ queryKey: ['vehicle', savedVehicle.id] })
       setVehicleSaved(true)
     },
-    onError: (mutationError) => {
+    onError: async (mutationError) => {
       if (mutationError instanceof ApiValidationError) {
+        const entries = Object.entries(mutationError.errors)
         const apiErrors = Object.fromEntries(
-          Object.entries(mutationError.errors).map(([field, messages]) => [field, messages[0]]),
+          entries
+            .filter(([field]) => fields.some((vehicleField) => vehicleField.name === field))
+            .map(([field, messages]) => [field, messages[0]]),
         ) as FieldErrors
         setFieldErrors(apiErrors)
+        const imageError = entries.find(([field]) => field === 'files'
+          || field.startsWith('files.')
+          || field === 'cover_index')
+        if (imageError) setImagesError(imageError[1][0])
       }
-      setError(
-        mutationError instanceof Error
-          ? mutationError.message
-          : `Não foi possível ${isEditing ? 'atualizar' : 'criar'} o veículo.`,
-      )
+      if (mutationError instanceof PartialVehicleUpdateError) {
+        const refreshedVehicle = await refetchVehicle()
+
+        if (refreshedVehicle.isSuccess && refreshedVehicle.data) {
+          initializeVehicleForm(refreshedVehicle.data)
+          setError(`${mutationError.message} O formulário foi atualizado com o estado atual do servidor.`)
+        } else {
+          setError(`${mutationError.message} Recarregue a página antes de tentar novamente.`)
+        }
+        return
+      }
+
+      setError(mutationError instanceof Error
+        ? mutationError.message
+        : `Não foi possível ${isEditing ? 'atualizar' : 'criar'} o veículo.`)
     },
   })
 
   useEffect(() => {
     if (!isEditing || !existingVehicle || formInitializedRef.current) return
 
-    const currentImages = existingVehicle.vehicle_images.map((image) => ({
-      id: `existing-${image.id}`,
-      existingId: image.id,
-      name: `Imagem ${image.id}`,
-      previewUrl: getVehicleImageUrl(image.path),
-    }))
-    const cover = existingVehicle.vehicle_images.find((image) => image.is_cover)
-
-    setSaleValue(currencyFormatter.format(existingVehicle.valor_venda))
-    setSelectedImages(currentImages)
-    setCoverImageId(cover ? `existing-${cover.id}` : currentImages[0]?.id ?? null)
-    initialImageIdsRef.current = existingVehicle.vehicle_images.map((image) => image.id)
-    formInitializedRef.current = true
+    initializeVehicleForm(existingVehicle)
   }, [existingVehicle, isEditing])
 
   useEffect(() => {
@@ -191,7 +224,15 @@ function CreateVehicle() {
     const { values, errors } = validateVehicle(formData)
     setFieldErrors(errors)
 
-    if (Object.keys(errors).length > 0) {
+    if (selectedImages.length === 0) {
+      setImagesError('Adicione pelo menos uma imagem ao veículo.')
+    } else if (!coverImageId) {
+      setImagesError('Selecione uma imagem de capa.')
+    } else {
+      setImagesError('')
+    }
+
+    if (Object.keys(errors).length > 0 || selectedImages.length === 0 || !coverImageId) {
       return
     }
 
@@ -216,11 +257,16 @@ function CreateVehicle() {
         selectedImages.flatMap((image) => image.existingId !== undefined ? [image.existingId] : []),
       )
       const coverImage = selectedImages.find((image) => image.id === coverImageId)
+      const initialCoverId = existingVehicle?.vehicle_images.find((image) => image.is_cover)?.id
+      const removedImageIds = initialImageIdsRef.current
+        .filter((id) => !retainedImageIds.has(id))
+        .sort((firstId, secondId) => Number(firstId === initialCoverId) - Number(secondId === initialCoverId))
       const payload: UpdateVehiclePayload = {
         ...vehicle,
         vehicleId: parsedVehicleId,
         images: newImages.map((image) => image.file),
-        removed_image_ids: initialImageIdsRef.current.filter((id) => !retainedImageIds.has(id)),
+        initial_image_ids: initialImageIdsRef.current,
+        removed_image_ids: removedImageIds,
         cover_image_id: coverImage?.existingId ?? null,
         cover_index: coverImage?.file
           ? newImages.findIndex((image) => image.id === coverImage.id)
@@ -265,15 +311,15 @@ function CreateVehicle() {
       return
     }
 
-    const invalidFile = files.find((file) => !file.type.startsWith('image/'))
+    const invalidFile = files.find((file) => !allowedImageTypes.has(file.type))
     if (invalidFile) {
-      setImagesError('Selecione apenas arquivos de imagem.')
+      setImagesError('Selecione apenas imagens JPG, JPEG, PNG ou WebP.')
       return
     }
 
     const oversizedFile = files.find((file) => file.size > maxImageSize)
     if (oversizedFile) {
-      setImagesError(`A imagem “${oversizedFile.name}” ultrapassa o limite de 200 MB.`)
+      setImagesError(`A imagem “${oversizedFile.name}” ultrapassa o limite de 2 MB.`)
       return
     }
 
@@ -289,12 +335,24 @@ function CreateVehicle() {
   }
 
   function removeImage(imageId: string) {
+    const selectedImage = selectedImages.find((image) => image.id === imageId)
+
+    if (
+      selectedImage?.existingId !== undefined
+      && !window.confirm('Remover esta imagem? A exclusão será efetivada quando você salvar as alterações.')
+    ) return
+
     setSelectedImages((currentImages) => {
       const imageToRemove = currentImages.find((image) => image.id === imageId)
       if (imageToRemove?.file) URL.revokeObjectURL(imageToRemove.previewUrl)
 
       const remainingImages = currentImages.filter((image) => image.id !== imageId)
       if (coverImageId === imageId) setCoverImageId(remainingImages[0]?.id ?? null)
+      if (remainingImages.length === 0) {
+        setImagesError('O veículo deve manter pelo menos uma imagem.')
+      } else {
+        setImagesError('')
+      }
       return remainingImages
     })
   }
@@ -345,7 +403,7 @@ function CreateVehicle() {
           <button className="back-button" type="button" onClick={() => navigate(returnPath)}>Voltar</button>
         </div>
 
-        <form className="create-vehicle-form" onSubmit={handleSubmit} noValidate>
+        <form key={formVersion} className="create-vehicle-form" onSubmit={handleSubmit} noValidate>
           <div className="create-vehicle-fields">
             {fields.map((field) => (
               <label className="field-group" key={field.name}>
@@ -407,13 +465,16 @@ function CreateVehicle() {
             <div className="vehicle-images-heading">
               <div>
                 <span>Imagens</span>
-                <small>Até 5 imagens, com no máximo 200 MB cada.</small>
+                <small>
+                  De 1 a 5 imagens, com no máximo 2 MB cada.
+                  {isEditing && ' Remoções só serão efetivadas ao salvar.'}
+                </small>
               </div>
               <label className="add-images-button" aria-disabled={selectedImages.length >= maxImages}>
                 Adicionar imagens
                 <input
                   type="file"
-                  accept="image/*"
+                  accept=".jpg,.jpeg,.png,.webp"
                   multiple
                   disabled={selectedImages.length >= maxImages}
                   onChange={handleImagesChange}

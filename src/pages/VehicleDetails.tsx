@@ -2,13 +2,37 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import Header from '../components/Header'
-import { deleteVehicle, getVehicle, getVehicleImageUrl } from '../services/api'
+import {
+  deleteVehicle,
+  deleteVehicleImage,
+  getVehicle,
+  getVehicleImageUrl,
+  setVehicleCover,
+} from '../services/api'
+import type { AuditUser, VehicleImage } from '../types/models'
 
 const priceFormatter = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
   currency: 'BRL',
-  maximumFractionDigits: 0,
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
 })
+
+const dateFormatter = new Intl.DateTimeFormat('pt-BR', {
+  dateStyle: 'short',
+  timeStyle: 'short',
+})
+
+function formatAuditDate(value?: string) {
+  if (!value) return 'Não informado'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? 'Não informado' : dateFormatter.format(date)
+}
+
+function formatAuditUser(user?: AuditUser | null, userId?: number | null) {
+  if (user) return user.name
+  return userId ? `Usuário #${userId}` : 'Não informado'
+}
 
 function VehicleDetails() {
   const navigate = useNavigate()
@@ -17,6 +41,9 @@ function VehicleDetails() {
   const parsedVehicleId = Number(vehicleId)
   const [selectedImage, setSelectedImage] = useState<number | null>(null)
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false)
+  const [imageToDelete, setImageToDelete] = useState<VehicleImage | null>(null)
+  const [imageFeedback, setImageFeedback] = useState('')
+  const [imageActionError, setImageActionError] = useState('')
   const { data: vehicle, isLoading, isError } = useQuery({
     queryKey: ['vehicle', parsedVehicleId],
     queryFn: () => getVehicle(parsedVehicleId),
@@ -30,10 +57,38 @@ function VehicleDetails() {
       navigate('/vehicles', { replace: true })
     },
   })
+  const coverMutation = useMutation({
+    mutationFn: (imageId: number) => setVehicleCover(parsedVehicleId, imageId),
+    onMutate: () => {
+      setImageFeedback('')
+      setImageActionError('')
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['vehicle', parsedVehicleId] })
+      await queryClient.invalidateQueries({ queryKey: ['vehicles'] })
+      setImageFeedback('Imagem de capa atualizada com sucesso.')
+    },
+    onError: (error) => {
+      setImageActionError(error instanceof Error ? error.message : 'Não foi possível definir a capa.')
+    },
+  })
+  const deleteImageMutation = useMutation({
+    mutationFn: (imageId: number) => deleteVehicleImage(parsedVehicleId, imageId),
+    onSuccess: async () => {
+      setSelectedImage(null)
+      setImageToDelete(null)
+      await queryClient.invalidateQueries({ queryKey: ['vehicle', parsedVehicleId] })
+      await queryClient.invalidateQueries({ queryKey: ['vehicles'] })
+      setImageFeedback('Imagem excluída com sucesso.')
+      setImageActionError('')
+    },
+  })
 
   const coverIndex = vehicle?.vehicle_images.findIndex((image) => image.is_cover) ?? -1
   const activeImageIndex = selectedImage ?? (coverIndex >= 0 ? coverIndex : 0)
   const activeImage = vehicle?.vehicle_images[activeImageIndex]
+  const creator = vehicle?.creator ?? vehicle?.created_by_user
+  const updater = vehicle?.updater ?? vehicle?.updated_by_user
 
   return (
     <>
@@ -80,6 +135,40 @@ function VehicleDetails() {
                   ))}
                 </div>
               )}
+
+              {activeImage && (
+                <div className="vehicle-gallery-actions">
+                  <button
+                    className="set-cover-button"
+                    type="button"
+                    onClick={() => coverMutation.mutate(activeImage.id)}
+                    disabled={activeImage.is_cover || coverMutation.isPending || deleteImageMutation.isPending}
+                  >
+                    {coverMutation.isPending
+                      ? 'Definindo capa...'
+                      : activeImage.is_cover ? 'Imagem de capa' : 'Definir como capa'}
+                  </button>
+                  <button
+                    className="delete-image-button"
+                    type="button"
+                    onClick={() => {
+                      deleteImageMutation.reset()
+                      setImageFeedback('')
+                      setImageActionError('')
+                      setImageToDelete(activeImage)
+                    }}
+                    disabled={vehicle.vehicle_images.length <= 1 || coverMutation.isPending || deleteImageMutation.isPending}
+                    title={vehicle.vehicle_images.length <= 1
+                      ? 'O veículo deve manter pelo menos uma imagem.'
+                      : 'Excluir imagem'}
+                  >
+                    Excluir imagem
+                  </button>
+                </div>
+              )}
+
+              {imageFeedback && <p className="image-action-feedback" role="status">{imageFeedback}</p>}
+              {imageActionError && <p className="image-action-error" role="alert">{imageActionError}</p>}
             </section>
 
             <section className="vehicle-information">
@@ -113,6 +202,25 @@ function VehicleDetails() {
                 <div><dt>Combustível</dt><dd>{vehicle.combustivel}</dd></div>
                 <div><dt>Chassi</dt><dd>{vehicle.chassi}</dd></div>
                 <div><dt>Status</dt><dd>{vehicle.active ? 'Ativo' : 'Inativo'}</dd></div>
+              </dl>
+
+              <dl className="vehicle-audit">
+                <div>
+                  <dt>Criado por</dt>
+                  <dd>{formatAuditUser(creator, vehicle.created_by ?? vehicle.user_id)}</dd>
+                </div>
+                <div>
+                  <dt>Criado em</dt>
+                  <dd>{formatAuditDate(vehicle.created_at)}</dd>
+                </div>
+                <div>
+                  <dt>Atualizado por</dt>
+                  <dd>{formatAuditUser(updater, vehicle.updated_by)}</dd>
+                </div>
+                <div>
+                  <dt>Atualizado em</dt>
+                  <dd>{formatAuditDate(vehicle.updated_at)}</dd>
+                </div>
               </dl>
 
               <button
@@ -168,6 +276,54 @@ function VehicleDetails() {
                   disabled={deleteMutation.isPending}
                 >
                   {deleteMutation.isPending ? 'Excluindo...' : 'Excluir'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {vehicle && imageToDelete && (
+          <div className="success-dialog-backdrop">
+            <div
+              className="delete-vehicle-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="delete-image-title"
+            >
+              <div className="delete-vehicle-dialog-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5" />
+                </svg>
+              </div>
+              <h3 id="delete-image-title">Excluir imagem?</h3>
+              <p>Esta ação remove permanentemente a imagem do veículo.</p>
+
+              {deleteImageMutation.isError && (
+                <span className="delete-vehicle-error" role="alert">
+                  {deleteImageMutation.error instanceof Error
+                    ? deleteImageMutation.error.message
+                    : 'Não foi possível excluir a imagem.'}
+                </span>
+              )}
+
+              <div className="delete-vehicle-dialog-actions">
+                <button
+                  className="cancel-button"
+                  type="button"
+                  onClick={() => {
+                    deleteImageMutation.reset()
+                    setImageToDelete(null)
+                  }}
+                  disabled={deleteImageMutation.isPending}
+                >
+                  Cancelar
+                </button>
+                <button
+                  className="confirm-delete-vehicle-button"
+                  type="button"
+                  onClick={() => deleteImageMutation.mutate(imageToDelete.id)}
+                  disabled={deleteImageMutation.isPending}
+                >
+                  {deleteImageMutation.isPending ? 'Excluindo...' : 'Excluir'}
                 </button>
               </div>
             </div>

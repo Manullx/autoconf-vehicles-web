@@ -1,45 +1,88 @@
-import { useState, type FormEvent } from 'react'
-import { login } from '../services/api'
+import { useEffect, useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useMutation } from '@tanstack/react-query'
+import { ApiError, isAuthenticated, login, validateAuthToken } from '../services/api'
 import '../App.css'
 
 function Login() {
+  const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [emailTouched, setEmailTouched] = useState(false)
   const [password, setPassword] = useState('')
   const [passwordVisible, setPasswordVisible] = useState(false)
+  const [passwordRequired, setPasswordRequired] = useState(false)
   const [submitted, setSubmitted] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [loginError, setLoginError] = useState('')
+  const [validatingToken, setValidatingToken] = useState(isAuthenticated())
   const emailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
   const emailIsEmpty = email.trim().length === 0
   const passwordIsEmpty = password.trim().length === 0
   const showEmailRequired = submitted && emailIsEmpty
   const showEmailInvalid = (emailTouched || submitted) && !emailIsEmpty && !emailIsValid
-  const showPasswordRequired = submitted && passwordIsEmpty
+  const showPasswordRequired = passwordRequired && passwordIsEmpty
+  const loginMutation = useMutation({
+    mutationFn: ({ email, password }: { email: string; password: string }) => login(email, password),
+    onSuccess: (data) => {
+      navigate(data.first_login ? '/first-access' : '/vehicles', { replace: true })
+    },
+    onError: (error) => {
+      if (error instanceof ApiError && error.status === 401) {
+        if (passwordIsEmpty) {
+          setPasswordRequired(true)
+          setLoginError('')
+          return
+        }
+        setLoginError('E-mail ou senha inválidos.')
+        return
+      }
+      setLoginError('Não foi possível conectar ao servidor.')
+    },
+  })
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    if (!isAuthenticated()) return
+
+    let active = true
+
+    validateAuthToken()
+      .then((user) => {
+        if (!active) return
+        if (user) {
+          navigate(user.first_login ? '/first-access' : '/vehicles', { replace: true })
+          return
+        }
+        setValidatingToken(false)
+      })
+      .catch(() => {
+        if (!active) return
+        setLoginError('Não foi possível validar sua sessão. Tente entrar novamente.')
+        setValidatingToken(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [navigate])
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setSubmitted(true)
     setEmailTouched(true)
 
-    if (emailIsEmpty || passwordIsEmpty || !emailIsValid) {
+    if (emailIsEmpty || !emailIsValid || showPasswordRequired) {
       return
     }
 
-    setIsSubmitting(true)
     setLoginError('')
+    loginMutation.mutate({ email: email.trim(), password })
+  }
 
-    try {
-      const response = await login(email.trim(), password)
-
-      if (response.status == 401) {
-        setLoginError('E-mail ou senha inválidos.')
-      }
-    } catch (e) {
-      setLoginError('Não foi possível conectar ao servidor.')
-    } finally {
-      setIsSubmitting(false)
-    }
+  if (validatingToken) {
+    return (
+      <main className="login-page">
+        <p className="session-loading">Validando sessão...</p>
+      </main>
+    )
   }
 
   return (
@@ -63,7 +106,11 @@ function Login() {
               placeholder="digite seu e-mail..."
               aria-invalid={showEmailRequired || showEmailInvalid}
               aria-describedby={showEmailRequired || showEmailInvalid ? 'email-error' : undefined}
-              onChange={(event) => setEmail(event.target.value)}
+              onChange={(event) => {
+                setEmail(event.target.value)
+                setPasswordRequired(false)
+                setLoginError('')
+              }}
               onBlur={() => setEmailTouched(true)}
             />
             {(showEmailRequired || showEmailInvalid) && (
@@ -74,7 +121,7 @@ function Login() {
           </div>
 
           <div className="field-group">
-            <label htmlFor="password">Senha</label>
+            <label htmlFor="password">Senha <span className="optional-field">(opcional no primeiro acesso)</span></label>
             <div className="password-field">
               <input
                 id="password"
@@ -84,7 +131,10 @@ function Login() {
                 placeholder="digite sua senha..."
                 aria-invalid={showPasswordRequired}
                 aria-describedby={showPasswordRequired ? 'password-error' : undefined}
-                onChange={(event) => setPassword(event.target.value)}
+                onChange={(event) => {
+                  setPassword(event.target.value)
+                  setLoginError('')
+                }}
               />
               <button
                 className="password-toggle"
@@ -120,8 +170,8 @@ function Login() {
             </span>
           )}
 
-          <button className="login-button" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Entrando...' : 'Entrar'}
+          <button className="login-button" type="submit" disabled={loginMutation.isPending}>
+            {loginMutation.isPending ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
       </section>

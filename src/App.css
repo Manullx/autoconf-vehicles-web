@@ -213,6 +213,44 @@
   border-bottom: 1px solid #eceef1;
 }
 
+.vehicle-information-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.edit-vehicle-button {
+  display: flex;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid #dce1e8;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #4b5563;
+  cursor: pointer;
+}
+
+.edit-vehicle-button:hover,
+.edit-vehicle-button:focus-visible {
+  border-color: #307fe2;
+  color: #307fe2;
+}
+
+.edit-vehicle-button svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
 .vehicle-information-heading h2 {
   margin: 12px 0 0;
   color: #111827;

@@ -16,6 +16,7 @@ function App() {
       <Route element={<ProtectedRoutes />}>
         <Route path="/vehicles" element={<Home />} />
         <Route path="/vehicles/create" element={<CreateVehicle />} />
+        <Route path="/vehicles/:vehicleId/edit" element={<CreateVehicle />} />
         <Route path="/vehicles/:vehicleId" element={<VehicleDetails />} />
       </Route>
       <Route

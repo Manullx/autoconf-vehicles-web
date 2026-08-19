@@ -74,10 +74,24 @@ function VehicleDetails() {
 
             <section className="vehicle-information">
               <div className="vehicle-information-heading">
-                <div>
-                  <span className="vehicle-information-plate">{vehicle.placa}</span>
-                  <h2>{vehicle.marca} {vehicle.modelo}</h2>
-                  <p>{vehicle.versao}</p>
+                <div className="vehicle-information-title">
+                  <div>
+                    <span className="vehicle-information-plate">{vehicle.placa}</span>
+                    <h2>{vehicle.marca} {vehicle.modelo}</h2>
+                    <p>{vehicle.versao}</p>
+                  </div>
+                  <button
+                    className="edit-vehicle-button"
+                    type="button"
+                    onClick={() => navigate(`/vehicles/${vehicle.id}/edit`)}
+                    aria-label="Editar veículo"
+                    title="Editar veículo"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M13.5 6.5 17.5 10.5" />
+                      <path d="m4 20 4.2-1 10.6-10.6a2.1 2.1 0 0 0-3-3L5.2 16Z" />
+                    </svg>
+                  </button>
                 </div>
                 <strong>{priceFormatter.format(vehicle.valor_venda)}</strong>
               </div>

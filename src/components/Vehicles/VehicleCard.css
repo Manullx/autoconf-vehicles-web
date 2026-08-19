@@ -5,7 +5,7 @@
 
 .vehicle-card {
   display: flex;
-  min-height: 190px;
+  height: 190px;
   overflow: hidden;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
@@ -90,6 +90,7 @@
 
 @media (max-width: 640px) {
   .vehicle-card {
+    height: auto;
     flex-direction: column;
   }
 

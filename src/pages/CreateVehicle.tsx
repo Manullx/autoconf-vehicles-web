@@ -1,18 +1,27 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate, useParams } from 'react-router-dom'
 import Header from '../components/Header'
-import { ApiValidationError, createVehicle } from '../services/api'
+import {
+  ApiValidationError,
+  createVehicle,
+  getVehicle,
+  getVehicleImageUrl,
+  updateVehicle,
+} from '../services/api'
 import {
   VehicleFuel,
   VehicleTransmission,
   type CreateVehicleData,
   type CreateVehiclePayload,
+  type UpdateVehiclePayload,
 } from '../types/models'
 
 interface SelectedImage {
   id: string
-  file: File
+  file?: File
+  existingId?: number
+  name: string
   previewUrl: string
 }
 
@@ -101,20 +110,37 @@ function validateVehicle(formData: FormData) {
 
 function CreateVehicle() {
   const navigate = useNavigate()
+  const { vehicleId } = useParams()
+  const parsedVehicleId = Number(vehicleId)
+  const isEditing = vehicleId !== undefined
   const queryClient = useQueryClient()
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
-  const [vehicleCreated, setVehicleCreated] = useState(false)
+  const [vehicleSaved, setVehicleSaved] = useState(false)
   const [saleValue, setSaleValue] = useState('')
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([])
   const [coverImageId, setCoverImageId] = useState<string | null>(null)
   const [imagesError, setImagesError] = useState('')
   const selectedImagesRef = useRef<SelectedImage[]>([])
+  const initialImageIdsRef = useRef<number[]>([])
+  const formInitializedRef = useRef(false)
+  const {
+    data: existingVehicle,
+    isLoading: isLoadingVehicle,
+    isError: isVehicleError,
+  } = useQuery({
+    queryKey: ['vehicle', parsedVehicleId],
+    queryFn: () => getVehicle(parsedVehicleId),
+    enabled: isEditing && Number.isInteger(parsedVehicleId) && parsedVehicleId > 0,
+  })
   const mutation = useMutation({
-    mutationFn: createVehicle,
-    onSuccess: async () => {
+    mutationFn: (payload: CreateVehiclePayload | UpdateVehiclePayload) => (
+      'vehicleId' in payload ? updateVehicle(payload) : createVehicle(payload)
+    ),
+    onSuccess: async (savedVehicle) => {
       await queryClient.invalidateQueries({ queryKey: ['vehicles'] })
-      setVehicleCreated(true)
+      await queryClient.invalidateQueries({ queryKey: ['vehicle', savedVehicle.id] })
+      setVehicleSaved(true)
     },
     onError: (mutationError) => {
       if (mutationError instanceof ApiValidationError) {
@@ -123,9 +149,31 @@ function CreateVehicle() {
         ) as FieldErrors
         setFieldErrors(apiErrors)
       }
-      setError(mutationError instanceof Error ? mutationError.message : 'Não foi possível criar o veículo.')
+      setError(
+        mutationError instanceof Error
+          ? mutationError.message
+          : `Não foi possível ${isEditing ? 'atualizar' : 'criar'} o veículo.`,
+      )
     },
   })
+
+  useEffect(() => {
+    if (!isEditing || !existingVehicle || formInitializedRef.current) return
+
+    const currentImages = existingVehicle.vehicle_images.map((image) => ({
+      id: `existing-${image.id}`,
+      existingId: image.id,
+      name: `Imagem ${image.id}`,
+      previewUrl: getVehicleImageUrl(image.path),
+    }))
+    const cover = existingVehicle.vehicle_images.find((image) => image.is_cover)
+
+    setSaleValue(currencyFormatter.format(existingVehicle.valor_venda))
+    setSelectedImages(currentImages)
+    setCoverImageId(cover ? `existing-${cover.id}` : currentImages[0]?.id ?? null)
+    initialImageIdsRef.current = existingVehicle.vehicle_images.map((image) => image.id)
+    formInitializedRef.current = true
+  }, [existingVehicle, isEditing])
 
   useEffect(() => {
     selectedImagesRef.current = selectedImages
@@ -159,11 +207,34 @@ function CreateVehicle() {
       cambio: values.cambio as VehicleTransmission,
       combustivel: values.combustivel as VehicleFuel,
     }
+    const newImages = selectedImages.filter(
+      (image): image is SelectedImage & { file: File } => Boolean(image.file),
+    )
+
+    if (isEditing) {
+      const retainedImageIds = new Set(
+        selectedImages.flatMap((image) => image.existingId !== undefined ? [image.existingId] : []),
+      )
+      const coverImage = selectedImages.find((image) => image.id === coverImageId)
+      const payload: UpdateVehiclePayload = {
+        ...vehicle,
+        vehicleId: parsedVehicleId,
+        images: newImages.map((image) => image.file),
+        removed_image_ids: initialImageIdsRef.current.filter((id) => !retainedImageIds.has(id)),
+        cover_image_id: coverImage?.existingId ?? null,
+        cover_index: coverImage?.file
+          ? newImages.findIndex((image) => image.id === coverImage.id)
+          : null,
+      }
+      mutation.mutate(payload)
+      return
+    }
+
     const payload: CreateVehiclePayload = {
       ...vehicle,
-      images: selectedImages.map((image) => image.file),
+      images: newImages.map((image) => image.file),
       cover_index: coverImageId
-        ? selectedImages.findIndex((image) => image.id === coverImageId)
+        ? newImages.findIndex((image) => image.id === coverImageId)
         : null,
     }
     mutation.mutate(payload)
@@ -209,6 +280,7 @@ function CreateVehicle() {
     const newImages = files.map((file) => ({
       id: crypto.randomUUID(),
       file,
+      name: file.name,
       previewUrl: URL.createObjectURL(file),
     }))
 
@@ -219,7 +291,7 @@ function CreateVehicle() {
   function removeImage(imageId: string) {
     setSelectedImages((currentImages) => {
       const imageToRemove = currentImages.find((image) => image.id === imageId)
-      if (imageToRemove) URL.revokeObjectURL(imageToRemove.previewUrl)
+      if (imageToRemove?.file) URL.revokeObjectURL(imageToRemove.previewUrl)
 
       const remainingImages = currentImages.filter((image) => image.id !== imageId)
       if (coverImageId === imageId) setCoverImageId(remainingImages[0]?.id ?? null)
@@ -239,16 +311,50 @@ function CreateVehicle() {
     }
   }
 
+  const returnPath = isEditing ? `/vehicles/${parsedVehicleId}` : '/vehicles'
+
+  if (isEditing && isLoadingVehicle) {
+    return (
+      <>
+        <Header />
+        <main className="create-vehicle-page">
+          <p className="vehicle-details-message">Carregando veículo...</p>
+        </main>
+      </>
+    )
+  }
+
+  if (
+    isEditing
+    && (isVehicleError || !existingVehicle || !Number.isInteger(parsedVehicleId) || parsedVehicleId <= 0)
+  ) {
+    return (
+      <>
+        <Header />
+        <main className="create-vehicle-page">
+          <button className="back-button" type="button" onClick={() => navigate('/vehicles')}>Voltar</button>
+          <p className="vehicle-details-message vehicle-details-error">
+            Não foi possível carregar o veículo.
+          </p>
+        </main>
+      </>
+    )
+  }
+
   return (
     <>
       <Header />
       <main className="create-vehicle-page">
         <div className="create-vehicle-heading">
           <div>
-            <h2>Criar veículo</h2>
-            <p>Preencha os dados para adicionar um veículo.</p>
+            <h2>{isEditing ? 'Editar veículo' : 'Criar veículo'}</h2>
+            <p>
+              {isEditing
+                ? 'Atualize os dados e as imagens do veículo.'
+                : 'Preencha os dados para adicionar um veículo.'}
+            </p>
           </div>
-          <button className="back-button" type="button" onClick={() => navigate('/vehicles')}>Voltar</button>
+          <button className="back-button" type="button" onClick={() => navigate(returnPath)}>Voltar</button>
         </div>
 
         <form className="create-vehicle-form" onSubmit={handleSubmit} noValidate>
@@ -270,7 +376,7 @@ function CreateVehicle() {
                 ) : field.type === 'select' ? (
                   <select
                     name={field.name}
-                    defaultValue=""
+                    defaultValue={existingVehicle?.[field.name] ?? ''}
                     onChange={() => clearFieldError(field.name)}
                     aria-invalid={Boolean(fieldErrors[field.name])}
                     required
@@ -296,6 +402,7 @@ function CreateVehicle() {
                     step={'step' in field ? field.step : undefined}
                     maxLength={'maxLength' in field ? field.maxLength : undefined}
                     min={field.type === 'number' ? 0 : undefined}
+                    defaultValue={existingVehicle ? String(existingVehicle[field.name]) : undefined}
                     onChange={() => clearFieldError(field.name)}
                     aria-invalid={Boolean(fieldErrors[field.name])}
                     required
@@ -332,7 +439,7 @@ function CreateVehicle() {
               <div className="vehicle-images-preview">
                 {selectedImages.map((image) => (
                   <div className="vehicle-image-preview" key={image.id}>
-                    <img src={image.previewUrl} alt={`Pré-visualização de ${image.file.name}`} />
+                    <img src={image.previewUrl} alt={`Pré-visualização de ${image.name}`} />
                     {coverImageId === image.id && <span className="cover-badge">Capa</span>}
                     <div className="vehicle-image-overlay">
                       <label>
@@ -356,14 +463,16 @@ function CreateVehicle() {
           {error && <p className="create-vehicle-error" role="alert">{error}</p>}
 
           <div className="create-vehicle-actions">
-            <button className="cancel-button" type="button" onClick={() => navigate('/vehicles')}>Cancelar</button>
+            <button className="cancel-button" type="button" onClick={() => navigate(returnPath)}>Cancelar</button>
             <button className="save-vehicle-button" type="submit" disabled={mutation.isPending}>
-              {mutation.isPending ? 'Salvando...' : 'Criar Veículo'}
+              {mutation.isPending
+                ? 'Salvando...'
+                : isEditing ? 'Salvar alterações' : 'Criar Veículo'}
             </button>
           </div>
         </form>
 
-        {vehicleCreated && (
+        {vehicleSaved && (
           <div className="success-dialog-backdrop">
             <div
               className="success-dialog"
@@ -377,14 +486,16 @@ function CreateVehicle() {
                   <path d="m8 12 2.5 2.5L16 9" />
                 </svg>
               </div>
-              <h3 id="vehicle-created-title">Veículo criado com sucesso</h3>
+              <h3 id="vehicle-created-title">
+                Veículo {isEditing ? 'atualizado' : 'criado'} com sucesso
+              </h3>
               <button
                 className="success-dialog-button"
                 type="button"
                 autoFocus
-                onClick={() => navigate('/vehicles')}
+                onClick={() => navigate(returnPath)}
               >
-                Voltar para veículos
+                {isEditing ? 'Voltar para o veículo' : 'Voltar para veículos'}
               </button>
             </div>
           </div>

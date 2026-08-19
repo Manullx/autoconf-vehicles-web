@@ -62,6 +62,14 @@ export interface CreateVehiclePayload extends CreateVehicleData {
   cover_index: number | null
 }
 
+export interface UpdateVehiclePayload extends CreateVehicleData {
+  vehicleId: number
+  images: File[]
+  removed_image_ids: number[]
+  cover_image_id: number | null
+  cover_index: number | null
+}
+
 export interface LoginResponse {
   user: User
   token: string

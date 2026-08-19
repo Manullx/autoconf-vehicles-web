@@ -22,6 +22,10 @@ function clearAuth(): void {
   localStorage.removeItem(authUserKey)
 }
 
+export function logout(): void {
+  clearAuth()
+}
+
 export function isAuthenticated(): boolean {
   return Boolean(localStorage.getItem(authTokenKey))
 }
@@ -284,6 +288,26 @@ export async function updateVehicle(vehicle: UpdateVehiclePayload): Promise<Vehi
   }
 
   return getVehicle(vehicle.vehicleId)
+}
+
+export async function deleteVehicle(vehicleId: number): Promise<void> {
+  if (!backendUrl) {
+    throw new Error('VITE_BACKEND_URL não está configurada.')
+  }
+
+  const token = localStorage.getItem(authTokenKey)
+  const response = await fetch(`${backendUrl}/api/vehicles/${vehicleId}`, {
+    method: 'DELETE',
+    headers: token
+      ? {
+          Authorization: `Bearer ${token}`,
+        }
+      : undefined,
+  })
+
+  if (!response.ok) {
+    throw new Error('Não foi possível excluir o veículo.')
+  }
 }
 
 export function getVehicleImageUrl(path: string): string {

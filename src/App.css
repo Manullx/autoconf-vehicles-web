@@ -20,6 +20,107 @@
   color: #307fe2;
 }
 
+.user-menu {
+  position: relative;
+  margin-left: auto;
+}
+
+.user-menu-trigger {
+  display: flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid #dce1e8;
+  border-radius: 50%;
+  background: #f7f8fa;
+  color: #4b5563;
+  cursor: pointer;
+}
+
+.user-menu-trigger:hover,
+.user-menu-trigger:focus-visible,
+.user-menu-trigger[aria-expanded='true'] {
+  border-color: #307fe2;
+  color: #307fe2;
+}
+
+.user-menu-trigger svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.user-menu-dropdown {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 220px;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 12px 28px rgba(17, 24, 39, 0.16);
+}
+
+.user-menu-greeting {
+  overflow: hidden;
+  padding: 16px;
+  border-bottom: 1px solid #eceef1;
+  color: #6b7280;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-menu-greeting strong {
+  color: #111827;
+}
+
+.user-menu-options {
+  padding: 6px;
+}
+
+.user-menu-options button {
+  display: flex;
+  width: 100%;
+  height: 38px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #4b5563;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.user-menu-options button:hover,
+.user-menu-options button:focus-visible {
+  background: #f3f4f6;
+  color: #307fe2;
+}
+
+.user-menu-options svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
 .vehicles-page {
   width: min(100% - 48px, 1120px);
   margin: 32px auto;
@@ -301,6 +402,102 @@
   font-size: 12px;
   font-weight: 700;
   text-transform: capitalize;
+}
+
+.delete-vehicle-button {
+  width: 100%;
+  height: 40px;
+  margin-top: 26px;
+  border: 1px solid #dc2626;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #dc2626;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.delete-vehicle-button:hover {
+  background: #fef2f2;
+}
+
+.delete-vehicle-dialog {
+  width: min(100%, 380px);
+  padding: 30px 26px 26px;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 18px 40px rgba(17, 24, 39, 0.2);
+  text-align: center;
+}
+
+.delete-vehicle-dialog-icon {
+  display: flex;
+  width: 54px;
+  height: 54px;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.delete-vehicle-dialog-icon svg {
+  width: 29px;
+  height: 29px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.delete-vehicle-dialog h3 {
+  margin: 0;
+  color: #111827;
+  font-size: 18px;
+}
+
+.delete-vehicle-dialog p {
+  margin: 9px 0 22px;
+  color: #6b7280;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.delete-vehicle-error {
+  display: block;
+  margin: -10px 0 16px;
+  color: #dc2626;
+  font-size: 10px;
+}
+
+.delete-vehicle-dialog-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.delete-vehicle-dialog-actions button {
+  width: 100%;
+}
+
+.confirm-delete-vehicle-button {
+  height: 40px;
+  border: 0;
+  border-radius: 8px;
+  background: #dc2626;
+  color: #ffffff;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.delete-vehicle-dialog-actions button:disabled {
+  cursor: wait;
+  opacity: 0.7;
 }
 
 .vehicle-details-message {

@@ -1,7 +1,7 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
-import { login } from '../services/api'
+import { ApiError, isAuthenticated, login, validateAuthToken } from '../services/api'
 import '../App.css'
 
 function Login() {
@@ -12,6 +12,7 @@ function Login() {
   const [passwordVisible, setPasswordVisible] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [loginError, setLoginError] = useState('')
+  const [validatingToken, setValidatingToken] = useState(isAuthenticated())
   const emailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
   const emailIsEmpty = email.trim().length === 0
   const passwordIsEmpty = password.trim().length === 0
@@ -20,17 +21,42 @@ function Login() {
   const showPasswordRequired = submitted && passwordIsEmpty
   const loginMutation = useMutation({
     mutationFn: ({ email, password }: { email: string; password: string }) => login(email, password),
-    onSuccess: (response) => {
-      if (response.ok) {
-        navigate('/')
-      } else if (response.status == 401) {
-        setLoginError('E-mail ou senha inválidos.')
-      }
+    onSuccess: () => {
+      navigate('/vehicles')
     },
-    onError: () => {
+    onError: (error) => {
+      if (error instanceof ApiError && error.status === 401) {
+        setLoginError('E-mail ou senha inválidos.')
+        return
+      }
       setLoginError('Não foi possível conectar ao servidor.')
     },
   })
+
+  useEffect(() => {
+    if (!isAuthenticated()) return
+
+    let active = true
+
+    validateAuthToken()
+      .then((isValid) => {
+        if (!active) return
+        if (isValid) {
+          navigate('/vehicles', { replace: true })
+          return
+        }
+        setValidatingToken(false)
+      })
+      .catch(() => {
+        if (!active) return
+        setLoginError('Não foi possível validar sua sessão. Tente entrar novamente.')
+        setValidatingToken(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [navigate])
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -43,6 +69,14 @@ function Login() {
 
     setLoginError('')
     loginMutation.mutate({ email: email.trim(), password })
+  }
+
+  if (validatingToken) {
+    return (
+      <main className="login-page">
+        <p className="session-loading">Validando sessão...</p>
+      </main>
+    )
   }
 
   return (

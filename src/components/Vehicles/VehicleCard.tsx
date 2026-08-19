@@ -1,4 +1,4 @@
-import type { Vehicle } from '../../services/api'
+import type { Vehicle } from '../../types/models'
 import { getVehicleImageUrl } from '../../services/api'
 import './VehicleCard.css'
 

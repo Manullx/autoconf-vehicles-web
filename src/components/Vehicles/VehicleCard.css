@@ -1,3 +1,8 @@
+.vehicle-card-link {
+  color: inherit;
+  text-decoration: none;
+}
+
 .vehicle-card {
   display: flex;
   min-height: 190px;
@@ -6,6 +11,19 @@
   border-radius: 12px;
   background: #ffffff;
   box-shadow: 0 4px 14px rgba(17, 24, 39, 0.07);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.vehicle-card-link:hover .vehicle-card,
+.vehicle-card-link:focus-visible .vehicle-card {
+  border-color: #307fe2;
+  box-shadow: 0 7px 20px rgba(17, 24, 39, 0.11);
+  transform: translateY(-1px);
+}
+
+.vehicle-card-link:focus-visible {
+  border-radius: 12px;
+  outline: 3px solid rgba(48, 127, 226, 0.2);
 }
 
 .vehicle-card-image {

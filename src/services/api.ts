@@ -135,6 +135,27 @@ export async function getVehicles(): Promise<VehiclesResponse> {
   return response.json() as Promise<VehiclesResponse>
 }
 
+export async function getVehicle(vehicleId: number): Promise<Vehicle> {
+  if (!backendUrl) {
+    throw new Error('VITE_BACKEND_URL não está configurada.')
+  }
+
+  const token = localStorage.getItem(authTokenKey)
+  const response = await fetch(`${backendUrl}/api/vehicles/${vehicleId}`, {
+    headers: token
+      ? {
+          Authorization: `Bearer ${token}`,
+        }
+      : undefined,
+  })
+
+  if (!response.ok) {
+    throw new Error('Não foi possível carregar o veículo.')
+  }
+
+  return response.json() as Promise<Vehicle>
+}
+
 export async function createVehicle(vehicle: CreateVehiclePayload): Promise<Vehicle> {
   if (!backendUrl) {
     throw new Error('VITE_BACKEND_URL não está configurada.')

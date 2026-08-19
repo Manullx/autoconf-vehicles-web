@@ -1,14 +1,16 @@
 import { useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useMutation } from '@tanstack/react-query'
 import { login } from '../services/api'
 import '../App.css'
 
 function Login() {
+  const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [emailTouched, setEmailTouched] = useState(false)
   const [password, setPassword] = useState('')
   const [passwordVisible, setPasswordVisible] = useState(false)
   const [submitted, setSubmitted] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [loginError, setLoginError] = useState('')
   const emailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
   const emailIsEmpty = email.trim().length === 0
@@ -16,8 +18,21 @@ function Login() {
   const showEmailRequired = submitted && emailIsEmpty
   const showEmailInvalid = (emailTouched || submitted) && !emailIsEmpty && !emailIsValid
   const showPasswordRequired = submitted && passwordIsEmpty
+  const loginMutation = useMutation({
+    mutationFn: ({ email, password }: { email: string; password: string }) => login(email, password),
+    onSuccess: (response) => {
+      if (response.ok) {
+        navigate('/')
+      } else if (response.status == 401) {
+        setLoginError('E-mail ou senha inválidos.')
+      }
+    },
+    onError: () => {
+      setLoginError('Não foi possível conectar ao servidor.')
+    },
+  })
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setSubmitted(true)
     setEmailTouched(true)
@@ -26,20 +41,8 @@ function Login() {
       return
     }
 
-    setIsSubmitting(true)
     setLoginError('')
-
-    try {
-      const response = await login(email.trim(), password)
-
-      if (response.status == 401) {
-        setLoginError('E-mail ou senha inválidos.')
-      }
-    } catch (e) {
-      setLoginError('Não foi possível conectar ao servidor.')
-    } finally {
-      setIsSubmitting(false)
-    }
+    loginMutation.mutate({ email: email.trim(), password })
   }
 
   return (
@@ -120,8 +123,8 @@ function Login() {
             </span>
           )}
 
-          <button className="login-button" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Entrando...' : 'Entrar'}
+          <button className="login-button" type="submit" disabled={loginMutation.isPending}>
+            {loginMutation.isPending ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
       </section>

@@ -6,6 +6,7 @@ import VehicleDetails from './pages/VehicleDetails'
 import Users from './pages/Users'
 import CreateUser from './pages/CreateUser'
 import FirstAccess from './pages/FirstAccess'
+import Register from './pages/Register'
 import { getStoredUser, isAuthenticated } from './services/api'
 
 function ProtectedRoutes() {
@@ -30,6 +31,7 @@ function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
       <Route element={<FirstAccessRoute />}>
         <Route path="/first-access" element={<FirstAccess />} />
       </Route>

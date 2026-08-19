@@ -1,16 +1,16 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { ApiError, isAuthenticated, login, validateAuthToken } from '../services/api'
 import '../App.css'
 
 function Login() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [email, setEmail] = useState('')
   const [emailTouched, setEmailTouched] = useState(false)
   const [password, setPassword] = useState('')
   const [passwordVisible, setPasswordVisible] = useState(false)
-  const [passwordRequired, setPasswordRequired] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [loginError, setLoginError] = useState('')
   const [validatingToken, setValidatingToken] = useState(isAuthenticated())
@@ -19,7 +19,11 @@ function Login() {
   const passwordIsEmpty = password.trim().length === 0
   const showEmailRequired = submitted && emailIsEmpty
   const showEmailInvalid = (emailTouched || submitted) && !emailIsEmpty && !emailIsValid
-  const showPasswordRequired = passwordRequired && passwordIsEmpty
+  const showPasswordRequired = submitted && passwordIsEmpty
+  const sessionMessage = (location.state as { sessionMessage?: string } | null)?.sessionMessage
+  const sessionMessageType = (
+    location.state as { sessionMessageType?: 'success' | 'warning' } | null
+  )?.sessionMessageType ?? 'success'
   const loginMutation = useMutation({
     mutationFn: ({ email, password }: { email: string; password: string }) => login(email, password),
     onSuccess: (data) => {
@@ -27,11 +31,6 @@ function Login() {
     },
     onError: (error) => {
       if (error instanceof ApiError && error.status === 401) {
-        if (passwordIsEmpty) {
-          setPasswordRequired(true)
-          setLoginError('')
-          return
-        }
         setLoginError('E-mail ou senha inválidos.')
         return
       }
@@ -69,7 +68,7 @@ function Login() {
     setSubmitted(true)
     setEmailTouched(true)
 
-    if (emailIsEmpty || !emailIsValid || showPasswordRequired) {
+    if (emailIsEmpty || !emailIsValid || passwordIsEmpty) {
       return
     }
 
@@ -108,7 +107,6 @@ function Login() {
               aria-describedby={showEmailRequired || showEmailInvalid ? 'email-error' : undefined}
               onChange={(event) => {
                 setEmail(event.target.value)
-                setPasswordRequired(false)
                 setLoginError('')
               }}
               onBlur={() => setEmailTouched(true)}
@@ -121,7 +119,7 @@ function Login() {
           </div>
 
           <div className="field-group">
-            <label htmlFor="password">Senha <span className="optional-field">(opcional no primeiro acesso)</span></label>
+            <label htmlFor="password">Senha</label>
             <div className="password-field">
               <input
                 id="password"
@@ -131,6 +129,7 @@ function Login() {
                 placeholder="digite sua senha..."
                 aria-invalid={showPasswordRequired}
                 aria-describedby={showPasswordRequired ? 'password-error' : undefined}
+                autoComplete="current-password"
                 onChange={(event) => {
                   setPassword(event.target.value)
                   setLoginError('')
@@ -170,9 +169,19 @@ function Login() {
             </span>
           )}
 
+          {sessionMessage && (
+            <span className={`session-message session-message-${sessionMessageType}`} role="status">
+              {sessionMessage}
+            </span>
+          )}
+
           <button className="login-button" type="submit" disabled={loginMutation.isPending}>
             {loginMutation.isPending ? 'Entrando...' : 'Entrar'}
           </button>
+
+          <p className="auth-alternative">
+            Ainda não possui conta? <Link to="/register">Criar conta</Link>
+          </p>
         </form>
       </section>
     </main>

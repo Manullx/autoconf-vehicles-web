@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import Header from '../components/Header'
 import { ApiValidationError, createUser } from '../services/api'
-import type { CreateUserPayload } from '../types/models'
+import type { CreatedUserResponse, CreateUserPayload } from '../types/models'
 
 type UserField = 'name' | 'email'
 type UserFieldErrors = Partial<Record<UserField, string>>
@@ -18,7 +18,8 @@ function CreateUser() {
   const [emailTouched, setEmailTouched] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
-  const [userCreated, setUserCreated] = useState(false)
+  const [createdUser, setCreatedUser] = useState<CreatedUserResponse | null>(null)
+  const [copyFeedback, setCopyFeedback] = useState('')
   const nameIsEmpty = name.trim().length === 0
   const emailIsEmpty = email.trim().length === 0
   const emailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
@@ -32,9 +33,9 @@ function CreateUser() {
         : '')
   const mutation = useMutation({
     mutationFn: createUser,
-    onSuccess: async () => {
+    onSuccess: async (user) => {
       await queryClient.invalidateQueries({ queryKey: ['users'] })
-      setUserCreated(true)
+      setCreatedUser(user)
     },
     onError: (mutationError) => {
       if (mutationError instanceof ApiValidationError) {
@@ -69,6 +70,17 @@ function CreateUser() {
     if (nameIsEmpty || emailIsEmpty || !emailIsValid) return
 
     mutation.mutate(payload)
+  }
+
+  async function copyTemporaryPassword() {
+    if (!createdUser) return
+
+    try {
+      await navigator.clipboard.writeText(createdUser.temporary_password)
+      setCopyFeedback('Senha copiada.')
+    } catch {
+      setCopyFeedback('Não foi possível copiar automaticamente. Copie a senha exibida.')
+    }
   }
 
   return (
@@ -146,7 +158,7 @@ function CreateUser() {
           </div>
         </form>
 
-        {userCreated && (
+        {createdUser && (
           <div className="success-dialog-backdrop">
             <div className="success-dialog" role="dialog" aria-modal="true" aria-labelledby="user-created-title">
               <div className="success-dialog-icon" aria-hidden="true">
@@ -156,6 +168,14 @@ function CreateUser() {
                 </svg>
               </div>
               <h3 id="user-created-title">Usuário criado com sucesso</h3>
+              <p className="temporary-password-help">
+                Envie esta senha temporária para <strong>{createdUser.name}</strong>. Ela será exibida somente agora.
+              </p>
+              <div className="temporary-password-value">
+                <code>{createdUser.temporary_password}</code>
+                <button type="button" onClick={copyTemporaryPassword}>Copiar</button>
+              </div>
+              {copyFeedback && <span className="copy-feedback" role="status">{copyFeedback}</span>}
               <button
                 className="success-dialog-button"
                 type="button"

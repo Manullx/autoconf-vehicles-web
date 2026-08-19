@@ -5,7 +5,6 @@ import {
   ApiError,
   ApiValidationError,
   createFirstAccessPassword,
-  logout,
 } from '../services/api'
 import '../App.css'
 
@@ -73,7 +72,6 @@ function FirstAccess() {
     },
     onError: (mutationError) => {
       if (mutationError instanceof ApiError && mutationError.status === 401) {
-        logout()
         navigate('/login', { replace: true })
         return
       }

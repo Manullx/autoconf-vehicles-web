@@ -29,9 +29,20 @@ export interface VehicleImage {
   is_cover: boolean
 }
 
+export interface AuditUser {
+  id: number
+  name: string
+  email?: string
+}
+
 export interface Vehicle {
   id: number
-  active: number
+  active: boolean
+  user_id?: number
+  created_by?: number | null
+  updated_by?: number | null
+  created_at?: string
+  updated_at?: string
   placa: string
   chassi: string
   marca: string
@@ -43,6 +54,10 @@ export interface Vehicle {
   cambio: VehicleTransmission
   combustivel: VehicleFuel
   vehicle_images: VehicleImage[]
+  creator?: AuditUser | null
+  updater?: AuditUser | null
+  created_by_user?: AuditUser | null
+  updated_by_user?: AuditUser | null
 }
 
 export interface CreateVehicleData {
@@ -66,6 +81,7 @@ export interface CreateVehiclePayload extends CreateVehicleData {
 export interface UpdateVehiclePayload extends CreateVehicleData {
   vehicleId: number
   images: File[]
+  initial_image_ids: number[]
   removed_image_ids: number[]
   cover_image_id: number | null
   cover_index: number | null
@@ -78,27 +94,56 @@ export interface LoginResponse {
   token_type: string
 }
 
-export interface VehiclesResponse {
-  current_page: number
-  data: Vehicle[]
+export interface PaginationLink {
+  url: string | null
+  label: string
+  active: boolean
 }
 
-export interface UsersResponse {
+export interface PaginatedResponse<T> {
   current_page: number
-  data: User[]
+  data: T[]
+  first_page_url: string
   from: number | null
   last_page: number
+  last_page_url: string
+  links: PaginationLink[]
+  next_page_url: string | null
+  path: string
   per_page: number
+  prev_page_url: string | null
   to: number | null
   total: number
-  next_page_url: string | null
-  prev_page_url: string | null
+}
+
+export type VehiclesResponse = PaginatedResponse<Vehicle>
+export type UsersResponse = PaginatedResponse<User>
+
+export interface VehicleListParams {
+  q?: string
+  marca?: string
+  modelo?: string
+  placa?: string
+  sort?: string
+  page?: number
+  per_page?: number
 }
 
 export interface CreateUserPayload {
   name: string
   email: string
   is_admin: boolean
+}
+
+export interface CreatedUserResponse extends User {
+  temporary_password: string
+}
+
+export interface RegisterPayload {
+  name: string
+  email: string
+  password: string
+  password_confirmation: string
 }
 
 export interface ValidationErrorResponse {

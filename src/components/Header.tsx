@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { getStoredUser, logout } from '../services/api'
 import '../App.css'
@@ -10,6 +10,26 @@ function Header() {
   const menuRef = useRef<HTMLDivElement>(null)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const user = getStoredUser()
+  const logoutMutation = useMutation({
+    mutationFn: logout,
+    onSuccess: () => {
+      queryClient.clear()
+      navigate('/login', {
+        replace: true,
+        state: { sessionMessage: 'Sessão encerrada com segurança.', sessionMessageType: 'success' },
+      })
+    },
+    onError: () => {
+      queryClient.clear()
+      navigate('/login', {
+        replace: true,
+        state: {
+          sessionMessage: 'A sessão local foi encerrada, mas o token não pôde ser revogado no servidor.',
+          sessionMessageType: 'warning',
+        },
+      })
+    },
+  })
 
   useEffect(() => {
     if (!isMenuOpen) return
@@ -32,12 +52,6 @@ function Header() {
       document.removeEventListener('keydown', handleEscape)
     }
   }, [isMenuOpen])
-
-  function handleLogout() {
-    logout()
-    queryClient.clear()
-    navigate('/login', { replace: true })
-  }
 
   return (
     <header className="app-header">
@@ -83,11 +97,16 @@ function Header() {
                   Usuários
                 </button>
               )}
-              <button type="button" role="menuitem" onClick={handleLogout}>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => logoutMutation.mutate()}
+                disabled={logoutMutation.isPending}
+              >
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M10 5H5v14h5M14 8l4 4-4 4M8 12h10" />
                 </svg>
-                Logout
+                {logoutMutation.isPending ? 'Saindo...' : 'Logout'}
               </button>
             </div>
           </div>

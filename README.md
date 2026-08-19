@@ -4,11 +4,12 @@ Frontend do sistema Autoconf para gerenciamento de veículos e usuários. A apli
 
 ## Funcionalidades
 
-- Autenticação e encerramento de sessão.
+- Registro público, autenticação e encerramento de sessão com revogação do token.
 - Fluxo obrigatório de criação de senha no primeiro acesso.
-- Listagem, busca e ordenação de veículos.
+- Listagem paginada com busca, filtros e ordenação múltipla processados pela API.
 - Cadastro, visualização, edição e exclusão de veículos.
-- Upload, remoção e definição da imagem de capa do veículo.
+- Upload de 1 a 5 imagens (até 2 MB cada), remoção e definição da imagem de capa.
+- Exibição dos dados de criação e atualização do veículo.
 - Listagem, criação e exclusão de usuários por administradores.
 - Proteção de rotas autenticadas e administrativas.
 - Redirecionamento para o login quando a API retornar `401 Unauthorized`.
@@ -42,21 +43,23 @@ Crie o arquivo `.env` na raiz do projeto. É possível copiar o exemplo existent
 cp .env.example .env
 ```
 
-Configure a URL base do backend, sem `/api` no final:
+Configure a URL base da API, incluindo `/api` no final:
 
 ```env
-VITE_BACKEND_URL=http://localhost:8000
+VITE_API_BASE_URL=http://localhost:8000/api
 ```
 
 Exemplos:
 
 ```env
 # Desenvolvimento local
-VITE_BACKEND_URL=http://localhost:8000
+VITE_API_BASE_URL=http://localhost:8000/api
 
 # Ambiente publicado
-VITE_BACKEND_URL=https://api.exemplo.com
+VITE_API_BASE_URL=https://api.exemplo.com/api
 ```
+
+Por compatibilidade com instalações anteriores, `VITE_BACKEND_URL` ainda é aceita e recebe automaticamente o sufixo `/api`. Novas instalações devem utilizar `VITE_API_BASE_URL`.
 
 Variáveis iniciadas com `VITE_` são incorporadas ao bundle durante o build. Portanto, alterações no `.env` exigem um novo build da aplicação.
 
@@ -99,6 +102,7 @@ O resultado do build é gerado no diretório `dist/`.
 | Rota | Acesso | Descrição |
 | --- | --- | --- |
 | `/login` | Público | Autenticação do usuário |
+| `/register` | Público | Criação de conta com senha |
 | `/first-access` | Primeiro acesso | Criação obrigatória da senha |
 | `/vehicles` | Autenticado | Listagem de veículos |
 | `/vehicles/create` | Autenticado | Cadastro de veículo |
@@ -111,11 +115,17 @@ As restrições no frontend melhoram a navegação, mas o backend também deve v
 
 ## Autenticação e primeiro acesso
 
-O login envia o e-mail e, quando informada, a senha para `POST /api/auth/login`. O token retornado e os dados do usuário são armazenados no `localStorage`.
+O registro público envia nome, e-mail, senha e confirmação para `POST /api/auth/register`. O login sempre envia e-mail e senha para `POST /api/auth/login`.
+
+O token retornado e os dados do usuário são armazenados no `sessionStorage`. Assim, eles são descartados ao encerrar a sessão da aba, reduzindo a persistência em relação ao `localStorage`. Como se trata de um PAT acessível ao JavaScript durante a sessão, essa estratégia não elimina o risco de roubo do token em caso de XSS; a aplicação deve manter dependências atualizadas e evitar a inserção de HTML não confiável.
 
 Quando a API retorna `first_login: true`, o usuário fica restrito à rota `/first-access`. Nessa tela, uma senha com no mínimo oito caracteres é enviada para `POST /api/auth/password`. Somente após a API confirmar `first_login: false` as demais rotas são liberadas.
 
 Qualquer resposta `401 Unauthorized` remove os dados locais da sessão e redireciona o navegador para `/login`.
+
+O logout chama `POST /api/auth/logout` antes de limpar a sessão local. Mesmo se a revogação falhar por indisponibilidade de rede, os dados locais são removidos e a tela de login informa que a revogação no servidor não pôde ser confirmada.
+
+Usuários criados pela área administrativa recebem uma senha temporária, exibida uma única vez após o cadastro. No primeiro login, essa senha é obrigatória e o usuário é direcionado para criar uma senha definitiva.
 
 ## Publicação
 

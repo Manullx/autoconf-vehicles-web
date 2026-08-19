@@ -110,7 +110,7 @@ function FirstAccess() {
       <section className="login-content first-access-content" aria-labelledby="first-access-title">
         <header className="login-header">
           <h1>
-            Autoconf<span>HUB</span>
+            <img src="/autoconf-logo.png" alt="Autoconf" />
           </h1>
           <p>Defina uma senha para concluir seu primeiro acesso.</p>
         </header>

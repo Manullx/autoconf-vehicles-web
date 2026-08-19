@@ -90,7 +90,7 @@ function Login() {
       <section className="login-content" aria-labelledby="login-title">
         <header className="login-header">
           <h1 id="login-title">
-            Autoconf<span>HUB</span>
+            <img src="/autoconf-logo.png" alt="Autoconf" />
           </h1>
           <p>Gestão de estoque de veículos</p>
         </header>

@@ -9,15 +9,13 @@
 
 .app-brand {
   margin: 0;
-  color: #111827;
-  font-size: 29px;
-  font-weight: 800;
-  line-height: 1.2;
-  letter-spacing: -1px;
+  line-height: 0;
 }
 
-.app-brand span {
-  color: #307fe2;
+.app-brand img {
+  display: block;
+  width: 170px;
+  height: auto;
 }
 
 .user-menu {
@@ -1148,15 +1146,14 @@
 
 .login-header h1 {
   margin: 0;
-  color: #111827;
-  font-size: 29px;
-  font-weight: 800;
-  line-height: 1.2;
-  letter-spacing: -1px;
+  line-height: 0;
 }
 
-.login-header h1 span {
-  color: #307fe2;
+.login-header h1 img {
+  display: block;
+  width: 205px;
+  height: auto;
+  margin: 0 auto;
 }
 
 .login-header p {

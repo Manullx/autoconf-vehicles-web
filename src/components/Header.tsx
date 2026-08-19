@@ -42,7 +42,7 @@ function Header() {
   return (
     <header className="app-header">
       <h1 className="app-brand">
-        Autoconf<span>HUB</span>
+        <img src="/autoconf-logo.png" alt="Autoconf" />
       </h1>
 
       <div className="user-menu" ref={menuRef}>

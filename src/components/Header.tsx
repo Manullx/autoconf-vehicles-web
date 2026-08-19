@@ -66,14 +66,23 @@ function Header() {
               Olá, <strong>{user?.name ?? 'usuário'}</strong>
             </div>
             <div className="user-menu-options">
-              <button type="button" role="menuitem">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <circle cx="9" cy="8" r="3" />
-                  <circle cx="17" cy="9" r="2.5" />
-                  <path d="M3.5 19c.5-3.3 2.3-5 5.5-5s5 1.7 5.5 5M14.5 14.5c3.4-.5 5.3 1 5.8 4.5" />
-                </svg>
-                Usuários
-              </button>
+              {user?.is_admin && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setIsMenuOpen(false)
+                    navigate('/users')
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="9" cy="8" r="3" />
+                    <circle cx="17" cy="9" r="2.5" />
+                    <path d="M3.5 19c.5-3.3 2.3-5 5.5-5s5 1.7 5.5 5M14.5 14.5c3.4-.5 5.3 1 5.8 4.5" />
+                  </svg>
+                  Usuários
+                </button>
+              )}
               <button type="button" role="menuitem" onClick={handleLogout}>
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M10 5H5v14h5M14 8l4 4-4 4M8 12h10" />

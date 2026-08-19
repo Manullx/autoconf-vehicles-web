@@ -10,6 +10,7 @@ function Login() {
   const [emailTouched, setEmailTouched] = useState(false)
   const [password, setPassword] = useState('')
   const [passwordVisible, setPasswordVisible] = useState(false)
+  const [passwordRequired, setPasswordRequired] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [loginError, setLoginError] = useState('')
   const [validatingToken, setValidatingToken] = useState(isAuthenticated())
@@ -18,14 +19,19 @@ function Login() {
   const passwordIsEmpty = password.trim().length === 0
   const showEmailRequired = submitted && emailIsEmpty
   const showEmailInvalid = (emailTouched || submitted) && !emailIsEmpty && !emailIsValid
-  const showPasswordRequired = submitted && passwordIsEmpty
+  const showPasswordRequired = passwordRequired && passwordIsEmpty
   const loginMutation = useMutation({
     mutationFn: ({ email, password }: { email: string; password: string }) => login(email, password),
-    onSuccess: () => {
-      navigate('/vehicles')
+    onSuccess: (data) => {
+      navigate(data.first_login ? '/first-access' : '/vehicles', { replace: true })
     },
     onError: (error) => {
       if (error instanceof ApiError && error.status === 401) {
+        if (passwordIsEmpty) {
+          setPasswordRequired(true)
+          setLoginError('')
+          return
+        }
         setLoginError('E-mail ou senha inválidos.')
         return
       }
@@ -39,10 +45,10 @@ function Login() {
     let active = true
 
     validateAuthToken()
-      .then((isValid) => {
+      .then((user) => {
         if (!active) return
-        if (isValid) {
-          navigate('/vehicles', { replace: true })
+        if (user) {
+          navigate(user.first_login ? '/first-access' : '/vehicles', { replace: true })
           return
         }
         setValidatingToken(false)
@@ -63,7 +69,7 @@ function Login() {
     setSubmitted(true)
     setEmailTouched(true)
 
-    if (emailIsEmpty || passwordIsEmpty || !emailIsValid) {
+    if (emailIsEmpty || !emailIsValid || showPasswordRequired) {
       return
     }
 
@@ -100,7 +106,11 @@ function Login() {
               placeholder="digite seu e-mail..."
               aria-invalid={showEmailRequired || showEmailInvalid}
               aria-describedby={showEmailRequired || showEmailInvalid ? 'email-error' : undefined}
-              onChange={(event) => setEmail(event.target.value)}
+              onChange={(event) => {
+                setEmail(event.target.value)
+                setPasswordRequired(false)
+                setLoginError('')
+              }}
               onBlur={() => setEmailTouched(true)}
             />
             {(showEmailRequired || showEmailInvalid) && (
@@ -111,7 +121,7 @@ function Login() {
           </div>
 
           <div className="field-group">
-            <label htmlFor="password">Senha</label>
+            <label htmlFor="password">Senha <span className="optional-field">(opcional no primeiro acesso)</span></label>
             <div className="password-field">
               <input
                 id="password"
@@ -121,7 +131,10 @@ function Login() {
                 placeholder="digite sua senha..."
                 aria-invalid={showPasswordRequired}
                 aria-describedby={showPasswordRequired ? 'password-error' : undefined}
-                onChange={(event) => setPassword(event.target.value)}
+                onChange={(event) => {
+                  setPassword(event.target.value)
+                  setLoginError('')
+                }}
               />
               <button
                 className="password-toggle"

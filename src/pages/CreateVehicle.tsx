@@ -299,18 +299,6 @@ function CreateVehicle() {
     })
   }
 
-  function handleImageDisplayChange(imageId: string, display: string) {
-    if (display === 'cover') {
-      setCoverImageId(imageId)
-      return
-    }
-
-    if (coverImageId === imageId) {
-      const replacementCover = selectedImages.find((image) => image.id !== imageId)
-      setCoverImageId(replacementCover?.id ?? imageId)
-    }
-  }
-
   const returnPath = isEditing ? `/vehicles/${parsedVehicleId}` : '/vehicles'
 
   if (isEditing && isLoadingVehicle) {
@@ -442,17 +430,29 @@ function CreateVehicle() {
                     <img src={image.previewUrl} alt={`Pré-visualização de ${image.name}`} />
                     {coverImageId === image.id && <span className="cover-badge">Capa</span>}
                     <div className="vehicle-image-overlay">
-                      <label>
-                        Exibição
-                        <select
-                          value={coverImageId === image.id ? 'cover' : 'gallery'}
-                          onChange={(event) => handleImageDisplayChange(image.id, event.target.value)}
+                      <div className="vehicle-image-controls">
+                        <label className="image-cover-checkbox">
+                          <input
+                            type="checkbox"
+                            checked={coverImageId === image.id}
+                            onChange={(event) => {
+                              if (event.target.checked) setCoverImageId(image.id)
+                            }}
+                          />
+                          Cover
+                        </label>
+                        <button
+                          className="remove-image-button"
+                          type="button"
+                          onClick={() => removeImage(image.id)}
+                          aria-label={`Remover ${image.name}`}
+                          title="Remover imagem"
                         >
-                          <option value="gallery">Galeria</option>
-                          <option value="cover">Capa</option>
-                        </select>
-                      </label>
-                      <button type="button" onClick={() => removeImage(image.id)}>Remover</button>
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}

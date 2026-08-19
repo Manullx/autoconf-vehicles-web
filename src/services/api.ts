@@ -1,7 +1,9 @@
 import type {
+  CreateUserPayload,
   CreateVehiclePayload,
   LoginResponse,
   User,
+  UsersResponse,
   ValidationErrorResponse,
   Vehicle,
   VehicleImage,
@@ -20,6 +22,20 @@ function storeUser(user: User): void {
 function clearAuth(): void {
   localStorage.removeItem(authTokenKey)
   localStorage.removeItem(authUserKey)
+}
+
+async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const response = await fetch(input, init)
+
+  if (response.status === 401) {
+    clearAuth()
+
+    if (window.location.pathname !== '/login') {
+      window.location.replace('/login')
+    }
+  }
+
+  return response
 }
 
 export function logout(): void {
@@ -61,20 +77,17 @@ export class ApiError extends Error {
   }
 }
 
-export async function login(email: string, password: string): Promise<LoginResponse> {
+export async function login(email: string, password?: string): Promise<LoginResponse> {
   if (!backendUrl) {
     throw new Error('VITE_BACKEND_URL não está configurada.')
   }
 
-  const response = await fetch(`${backendUrl}/api/auth/login`, {
+  const response = await apiFetch(`${backendUrl}/api/auth/login`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      email,
-      password,
-    }),
+    body: JSON.stringify({ email, ...(password ? { password } : {}) }),
   })
 
   if (!response.ok) {
@@ -85,9 +98,54 @@ export async function login(email: string, password: string): Promise<LoginRespo
   const token = data.token.replace(/^Bearer\s+/i, '')
 
   localStorage.setItem(authTokenKey, token)
-  storeUser(data.user)
+  storeUser({ ...data.user, first_login: data.first_login })
 
   return data
+}
+
+export async function createFirstAccessPassword(
+  password: string,
+  passwordConfirmation: string,
+): Promise<User> {
+  if (!backendUrl) {
+    throw new Error('VITE_BACKEND_URL não está configurada.')
+  }
+
+  const token = localStorage.getItem(authTokenKey)
+  const response = await apiFetch(`${backendUrl}/api/auth/password`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({
+      password,
+      password_confirmation: passwordConfirmation,
+    }),
+  })
+
+  if (response.status === 401) {
+    clearAuth()
+    throw new ApiError('Sua sessão expirou.', response.status)
+  }
+
+  if (response.status === 422) {
+    const data: ValidationErrorResponse = await response.json()
+    throw new ApiValidationError(data.errors ?? {})
+  }
+
+  if (!response.ok) {
+    throw new Error('Não foi possível criar sua senha.')
+  }
+
+  const user: User = await response.json()
+
+  if (user.first_login !== false) {
+    throw new Error('Não foi possível confirmar a criação da senha.')
+  }
+
+  storeUser(user)
+  return user
 }
 
 export async function validateAuthToken(): Promise<User | null> {
@@ -99,7 +157,7 @@ export async function validateAuthToken(): Promise<User | null> {
 
   if (!token) return null
 
-  const response = await fetch(`${backendUrl}/api/auth/me`, {
+  const response = await apiFetch(`${backendUrl}/api/auth/me`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -126,7 +184,7 @@ export async function getVehicles(): Promise<VehiclesResponse> {
 
   const token = localStorage.getItem(authTokenKey)
 
-  const response = await fetch(`${backendUrl}/api/vehicles`, {
+  const response = await apiFetch(`${backendUrl}/api/vehicles`, {
     headers: token
       ? {
           Authorization: `Bearer ${token}`,
@@ -141,13 +199,81 @@ export async function getVehicles(): Promise<VehiclesResponse> {
   return response.json() as Promise<VehiclesResponse>
 }
 
+export async function getUsers(page = 1): Promise<UsersResponse> {
+  if (!backendUrl) {
+    throw new Error('VITE_BACKEND_URL não está configurada.')
+  }
+
+  const token = localStorage.getItem(authTokenKey)
+  const response = await apiFetch(`${backendUrl}/api/users?page=${page}`, {
+    headers: token
+      ? {
+          Authorization: `Bearer ${token}`,
+        }
+      : undefined,
+  })
+
+  if (!response.ok) {
+    throw new Error('Não foi possível carregar os usuários.')
+  }
+
+  return response.json() as Promise<UsersResponse>
+}
+
+export async function createUser(user: CreateUserPayload): Promise<User> {
+  if (!backendUrl) {
+    throw new Error('VITE_BACKEND_URL não está configurada.')
+  }
+
+  const token = localStorage.getItem(authTokenKey)
+  const response = await apiFetch(`${backendUrl}/api/users`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(user),
+  })
+
+  if (response.status === 422) {
+    const data: ValidationErrorResponse = await response.json()
+    throw new ApiValidationError(data.errors ?? {})
+  }
+
+  if (!response.ok) {
+    throw new Error('Não foi possível criar o usuário.')
+  }
+
+  return response.json() as Promise<User>
+}
+
+export async function deleteUser(userId: number): Promise<void> {
+  if (!backendUrl) {
+    throw new Error('VITE_BACKEND_URL não está configurada.')
+  }
+
+  const token = localStorage.getItem(authTokenKey)
+  const response = await apiFetch(`${backendUrl}/api/users/${userId}`, {
+    method: 'DELETE',
+    headers: token
+      ? {
+          Authorization: `Bearer ${token}`,
+        }
+      : undefined,
+  })
+
+  if (!response.ok) {
+    throw new Error('Não foi possível excluir o usuário.')
+  }
+}
+
 export async function getVehicle(vehicleId: number): Promise<Vehicle> {
   if (!backendUrl) {
     throw new Error('VITE_BACKEND_URL não está configurada.')
   }
 
   const token = localStorage.getItem(authTokenKey)
-  const response = await fetch(`${backendUrl}/api/vehicles/${vehicleId}`, {
+  const response = await apiFetch(`${backendUrl}/api/vehicles/${vehicleId}`, {
     headers: token
       ? {
           Authorization: `Bearer ${token}`,
@@ -186,7 +312,7 @@ export async function createVehicle(vehicle: CreateVehiclePayload): Promise<Vehi
     formData.append('cover_index', String(vehicle.cover_index))
   }
 
-  const response = await fetch(`${backendUrl}/api/vehicles`, {
+  const response = await apiFetch(`${backendUrl}/api/vehicles`, {
     method: 'POST',
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -215,7 +341,7 @@ export async function updateVehicle(vehicle: UpdateVehiclePayload): Promise<Vehi
   const headers = {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   }
-  const response = await fetch(`${backendUrl}/api/vehicles/${vehicle.vehicleId}`, {
+  const response = await apiFetch(`${backendUrl}/api/vehicles/${vehicle.vehicleId}`, {
     method: 'PATCH',
     headers: {
       ...headers,
@@ -249,7 +375,7 @@ export async function updateVehicle(vehicle: UpdateVehiclePayload): Promise<Vehi
   if (vehicle.images.length > 0) {
     const formData = new FormData()
     vehicle.images.forEach((image) => formData.append('files[]', image))
-    const uploadResponse = await fetch(`${backendUrl}/api/vehicles/${vehicle.vehicleId}/images`, {
+    const uploadResponse = await apiFetch(`${backendUrl}/api/vehicles/${vehicle.vehicleId}/images`, {
       method: 'POST',
       headers,
       body: formData,
@@ -266,7 +392,7 @@ export async function updateVehicle(vehicle: UpdateVehiclePayload): Promise<Vehi
     ?? (vehicle.cover_index !== null ? uploadedImages[vehicle.cover_index]?.id : null)
 
   if (coverImageId !== null) {
-    const coverResponse = await fetch(
+    const coverResponse = await apiFetch(
       `${backendUrl}/api/vehicles/${vehicle.vehicleId}/images/${coverImageId}/cover`,
       { method: 'PATCH', headers },
     )
@@ -277,7 +403,7 @@ export async function updateVehicle(vehicle: UpdateVehiclePayload): Promise<Vehi
   }
 
   for (const imageId of vehicle.removed_image_ids) {
-    const deleteResponse = await fetch(
+    const deleteResponse = await apiFetch(
       `${backendUrl}/api/vehicles/${vehicle.vehicleId}/images/${imageId}`,
       { method: 'DELETE', headers },
     )
@@ -296,7 +422,7 @@ export async function deleteVehicle(vehicleId: number): Promise<void> {
   }
 
   const token = localStorage.getItem(authTokenKey)
-  const response = await fetch(`${backendUrl}/api/vehicles/${vehicleId}`, {
+  const response = await apiFetch(`${backendUrl}/api/vehicles/${vehicleId}`, {
     method: 'DELETE',
     headers: token
       ? {

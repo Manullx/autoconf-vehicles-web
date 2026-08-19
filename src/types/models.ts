@@ -20,6 +20,7 @@ export interface User {
   created_at: string
   updated_at: string
   is_admin: boolean
+  first_login: boolean
 }
 
 export interface VehicleImage {
@@ -72,6 +73,7 @@ export interface UpdateVehiclePayload extends CreateVehicleData {
 
 export interface LoginResponse {
   user: User
+  first_login: boolean
   token: string
   token_type: string
 }
@@ -79,6 +81,24 @@ export interface LoginResponse {
 export interface VehiclesResponse {
   current_page: number
   data: Vehicle[]
+}
+
+export interface UsersResponse {
+  current_page: number
+  data: User[]
+  from: number | null
+  last_page: number
+  per_page: number
+  to: number | null
+  total: number
+  next_page_url: string | null
+  prev_page_url: string | null
+}
+
+export interface CreateUserPayload {
+  name: string
+  email: string
+  is_admin: boolean
 }
 
 export interface ValidationErrorResponse {
